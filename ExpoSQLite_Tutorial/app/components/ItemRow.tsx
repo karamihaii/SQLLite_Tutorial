@@ -39,14 +39,6 @@ const ItemRow: React.FC<Props> = ({ name, quantity, onEdit, onDelete, onDuplicat
           <MaterialIcons name="delete" size={24} color="#D32F2F" />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={onDuplicate}
-          accessibilityRole="button"
-          accessibilityLabel={`Duplicate ${name}`}
-          style={styles.iconButton}
-        >
-          <MaterialIcons name="delete" size={24} color="#D32F2F" />
-        </TouchableOpacity>
       </View>
     </View>
     

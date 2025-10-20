@@ -78,9 +78,16 @@ export const insertItem = async (
  * @param db - The SQLite database instance
  * @returns Promise that resolves to an array of Item objects
  */
-export const fetchItems = async (db: SQLiteDatabase): Promise<Item[]> => {
-  return db.getAllAsync<Item>("SELECT * FROM items;");
-};
+//export const fetchItems = async (db: SQLiteDatabase): Promise<Item[]> => {
+  //return db.getAllAsync<Item>("SELECT * FROM items;");
+//};
+
+export async function fetchItems(db: SQLiteDatabase, order: 'ASC' | 'DESC' = 'ASC'): Promise<Item[]> {
+  const results = await db.getAllAsync(
+    `SELECT * FROM items ORDER BY name ${order};`
+  );
+  return results as Item[];
+}
 
 /**
  * Update Item

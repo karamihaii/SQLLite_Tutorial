@@ -1,5 +1,5 @@
 import { useSQLiteContext } from "expo-sqlite";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Button,
@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { fetchItems, insertItem, deleteItem, updateItem, type Item } from "../data/db";
 import ItemRow from "./components/ItemRow";
+import { Picker } from "@react-native-picker/picker";
 
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
   const [name, setName] = useState<string>("");
   const [quantity, setQuantity] = useState<string>("");
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
 
   /**
    * Database State
@@ -40,6 +42,8 @@ export default function App() {
    * When this updates, React re-renders the FlatList to show the new data.
    */
   const [items, setItems] = useState<Item[]>([]);
+
+
 
   /**
    * Load Items on Mount
@@ -68,14 +72,22 @@ export default function App() {
    *
    * @returns Promise that resolves when items are successfully loaded
    */
+  //const loadItems = async () => {
+    //try {
+     // const value = await fetchItems(db);
+      //setItems(value);
+    //} catch (err) {
+      //console.log("Failed to fetch items", err);
+    //}
+  //};
   const loadItems = async () => {
-    try {
-      const value = await fetchItems(db);
-      setItems(value);
-    } catch (err) {
-      console.log("Failed to fetch items", err);
-    }
-  };
+  try {
+    const value = await fetchItems(db, sortOrder); // <-- pass the order here
+    setItems(value);
+  } catch (err) {
+    console.log("Failed to fetch items", err);
+  }
+};
 
   /**
    * Save Item Function
@@ -246,6 +258,21 @@ export default function App() {
         title={editingId === null ? "Save Item" : "Update Item"}
         onPress={saveItem}
       />
+      
+      
+      <View style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 8, overflow: "hidden" }}>
+        <Picker
+          selectedValue={sortOrder}
+          onValueChange={(value: string) => {
+            setSortOrder(value as 'ASC' | 'DESC');
+            loadItems();
+          }}
+          style={styles.dropdown}
+        >
+          <Picker.Item label="A to Z" value="ASC" />
+          <Picker.Item label="Z to A" value="DESC" />
+        </Picker>
+      </View>
       <FlatList
         style={styles.list}
         data={items}
@@ -288,10 +315,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
     padding: 20,
+    // Removed alignItems and justifyContent
   },
+  dropdown: {
+    height: 50,
+    width: 200,
+    borderRadius: 8,
+    marginTop: 20,
+  },
+  // ... rest unchanged
+
   title: {
     fontSize: 24,
     fontWeight: "bold",
