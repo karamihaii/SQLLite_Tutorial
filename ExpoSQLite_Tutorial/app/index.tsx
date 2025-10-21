@@ -1,5 +1,5 @@
 import { useSQLiteContext } from "expo-sqlite";
-import React, { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Button,
@@ -8,54 +8,58 @@ import {
   Text,
   TextInput,
   View,
+  TouchableOpacity,
 } from "react-native";
-import { fetchItems, insertItem, deleteItem, updateItem, type Item } from "../data/db";
+import { Menu, Provider as PaperProvider } from "react-native-paper";
+import {
+  deleteItem,
+  fetchItems,
+  insertItem,
+  updateItem,
+  type Item,
+} from "../data/db";
 import ItemRow from "./components/ItemRow";
-import { Menu, Button as PaperButton } from "react-native-paper";
 
 export default function App() {
   const db = useSQLiteContext();
 
   const [name, setName] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [sortOrder, setSortOrder] = useState<"ASC" | "DESC">("ASC");
-  const [items, setItems] = useState<Item[]>([]);
+  const [quantity, setQuantity] = useState<number | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
 
-  const openMenu = () => setMenuVisible(true);
-  const closeMenu = () => setMenuVisible(false);
+  const [sortMenuVisible, setSortMenuVisible] = useState(false);
+  const [sortMethod, setSortMethod] = useState<
+    "nameAZ" | "nameZA" | "qtyLH" | "qtyHL" | "qtyLH_nameAZ" | "qtyHL_nameZA"
+  >("nameAZ");
 
-  // ✅ Memoize loadItems to prevent re-creation on every render
-  const loadItems = useCallback(async () => {
+  useEffect(() => {
+    loadItems();
+  }, [sortMethod]);
+
+  const loadItems = async () => {
     try {
-      const value = await fetchItems(db, sortOrder);
+      const value = await fetchItems(db, sortMethod);
       setItems(value);
     } catch (err) {
       console.log("Failed to fetch items", err);
     }
-  }, [db, sortOrder]);
-
-  // ✅ Only re-run when sortOrder changes
-  useEffect(() => {
-    loadItems();
-  }, [loadItems]);
+  };
 
   const saveOrUpdate = async () => {
-    if (!name.trim()) return;
-    const parsedQuantity = parseInt(quantity, 10);
-    if (Number.isNaN(parsedQuantity)) return;
+    if (!name.trim() || quantity === null) return;
 
     try {
       if (editingId === null) {
-        await insertItem(db, name.trim(), parsedQuantity);
+        await insertItem(db, name.trim(), quantity);
       } else {
-        await updateItem(db, editingId, name.trim(), parsedQuantity);
+        await updateItem(db, editingId, name.trim(), quantity);
       }
-      await loadItems();
       setName("");
-      setQuantity("");
+      setQuantity(null);
       setEditingId(null);
+      await loadItems();
     } catch (err) {
       console.log("Failed to save/update item", err);
     }
@@ -64,7 +68,7 @@ export default function App() {
   const startEdit = (item: Item) => {
     setEditingId(item.id);
     setName(item.name);
-    setQuantity(String(item.quantity));
+    setQuantity(item.quantity);
   };
 
   const confirmDelete = (id: number) => {
@@ -76,12 +80,12 @@ export default function App() {
         onPress: async () => {
           try {
             await deleteItem(db, id);
-            await loadItems();
             if (editingId === id) {
               setEditingId(null);
               setName("");
-              setQuantity("");
+              setQuantity(null);
             }
+            await loadItems();
           } catch (err) {
             console.log("Failed to delete item", err);
           }
@@ -91,85 +95,139 @@ export default function App() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>SQLite Example</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Item Name"
-        value={name}
-        onChangeText={setName}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Quantity"
-        value={quantity}
-        onChangeText={setQuantity}
-        keyboardType="numeric"
-      />
+    <PaperProvider>
+      <View style={styles.container}>
+        <Text style={styles.title}>SQLite Example with SQL Sort</Text>
 
-      <Button
-        title={editingId === null ? "Save Item" : "Update Item"}
-        onPress={saveOrUpdate}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Item Name"
+          value={name}
+          onChangeText={setName}
+        />
 
-      <View style={{ marginTop: 20 }}>
+        {/* Quantity Dropdown */}
         <Menu
           visible={menuVisible}
-          onDismiss={closeMenu}
+          onDismiss={() => setMenuVisible(false)}
           anchor={
-            <PaperButton
-              mode="outlined"
-              onPress={openMenu}
-              contentStyle={{ flexDirection: "row", justifyContent: "space-between" }}
-              style={{ width: 200, borderRadius: 8 }}
-              uppercase={false}
+            <TouchableOpacity
+              style={styles.menuButton}
+              onPress={() => setMenuVisible(true)}
             >
-              {sortOrder === "ASC" ? "A to Z" : "Z to A"}
-            </PaperButton>
+              <Text style={styles.menuButtonText}>
+                {quantity !== null ? `Qty: ${quantity}` : "Select Quantity"}
+              </Text>
+            </TouchableOpacity>
+          }
+        >
+          {[1, 2, 3, 4, 5, 10, 20].map((num) => (
+            <Menu.Item
+              key={num}
+              title={`${num}`}
+              onPress={() => {
+                setQuantity(num);
+                setMenuVisible(false);
+              }}
+            />
+          ))}
+        </Menu>
+
+        <Button
+          title={editingId === null ? "Save Item" : "Update Item"}
+          onPress={saveOrUpdate}
+        />
+
+        {/* Combined Sort Dropdown */}
+        <Menu
+          visible={sortMenuVisible}
+          onDismiss={() => setSortMenuVisible(false)}
+          anchor={
+            <TouchableOpacity
+              style={styles.menuButton}
+              onPress={() => setSortMenuVisible(true)}
+            >
+              <Text style={styles.menuButtonText}>
+                Sort:{" "}
+                {{
+                  nameAZ: "Name A→Z",
+                  nameZA: "Name Z→A",
+                  qtyLH: "Quantity Low→High",
+                  qtyHL: "Quantity High→Low",
+                  qtyLH_nameAZ: "Qty Low→High + Name A→Z",
+                  qtyHL_nameZA: "Qty High→Low + Name Z→A",
+                }[sortMethod]}
+              </Text>
+            </TouchableOpacity>
           }
         >
           <Menu.Item
+            title="Name A → Z"
             onPress={() => {
-              setSortOrder("ASC");
-              closeMenu();
+              setSortMethod("nameAZ");
+              setSortMenuVisible(false);
             }}
-            title="A to Z"
           />
           <Menu.Item
+            title="Name Z → A"
             onPress={() => {
-              setSortOrder("DESC");
-              closeMenu();
+              setSortMethod("nameZA");
+              setSortMenuVisible(false);
             }}
-            title="Z to A"
+          />
+          <Menu.Item
+            title="Quantity Low → High"
+            onPress={() => {
+              setSortMethod("qtyLH");
+              setSortMenuVisible(false);
+            }}
+          />
+          <Menu.Item
+            title="Quantity High → Low"
+            onPress={() => {
+              setSortMethod("qtyHL");
+              setSortMenuVisible(false);
+            }}
+          />
+          <Menu.Item
+            title="Qty Low→High + Name A→Z"
+            onPress={() => {
+              setSortMethod("qtyLH_nameAZ");
+              setSortMenuVisible(false);
+            }}
+          />
+          <Menu.Item
+            title="Qty High→Low + Name Z→A"
+            onPress={() => {
+              setSortMethod("qtyHL_nameZA");
+              setSortMenuVisible(false);
+            }}
           />
         </Menu>
-      </View>
 
-      <FlatList
-        style={styles.list}
-        data={items}
-        keyExtractor={(item) => item.id.toString()}
-        ItemSeparatorComponent={() => (
-          <View style={{ height: 1, backgroundColor: "#eee", marginHorizontal: 14 }} />
-        )}
-        renderItem={({ item }) => (
-          <ItemRow
-            name={item.name}
-            quantity={item.quantity}
-            onEdit={() => startEdit(item)}
-            onDelete={() => confirmDelete(item.id)}
-          />
-        )}
-        ListEmptyComponent={
-          <Text style={{ textAlign: "center", marginTop: 24, color: "#888" }}>
-            No items yet. Add your first one above.
-          </Text>
-        }
-        contentContainerStyle={
-          items.length === 0 ? { flexGrow: 1, justifyContent: "center" } : undefined
-        }
-      />
-    </View>
+        <FlatList
+          style={styles.list}
+          data={items}
+          keyExtractor={(item) => item.id.toString()}
+          ItemSeparatorComponent={() => (
+            <View style={{ height: 1, backgroundColor: "#eee", margin: 14 }} />
+          )}
+          renderItem={({ item }) => (
+            <ItemRow
+              name={item.name}
+              quantity={item.quantity}
+              onEdit={() => startEdit(item)}
+              onDelete={() => confirmDelete(item.id)}
+            />
+          )}
+          ListEmptyComponent={
+            <Text style={{ textAlign: "center", marginTop: 24, color: "#888" }}>
+              No items yet. Add your first one above.
+            </Text>
+          }
+        />
+      </View>
+    </PaperProvider>
   );
 }
 
@@ -179,20 +237,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     padding: 20,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 20,
-  },
+  title: { fontSize: 24, fontWeight: "bold", marginBottom: 20 },
   input: {
     width: "100%",
     borderWidth: 1,
     borderColor: "#ccc",
     padding: 10,
     marginBottom: 10,
+    borderRadius: 6,
   },
-  list: {
-    marginTop: 20,
-    width: "100%",
+  menuButton: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 6,
+    backgroundColor: "#fafafa",
+    marginBottom: 10,
   },
+  menuButtonText: { fontSize: 16, color: "#333" },
+  list: { marginTop: 20, width: "100%" },
 });
+
