@@ -1,5 +1,5 @@
 import { useSQLiteContext } from "expo-sqlite";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   Alert,
   Button,
@@ -11,140 +11,36 @@ import {
 } from "react-native";
 import { fetchItems, insertItem, deleteItem, updateItem, type Item } from "../data/db";
 import ItemRow from "./components/ItemRow";
-import { Picker } from "@react-native-picker/picker";
-
+import { Menu, Button as PaperButton } from "react-native-paper";
 
 export default function App() {
-  /**
-   * Database Access
-   *
-   * useSQLiteContext() hook gives us access to the database instance.
-   * This works because _layout.tsx wraps the app in SQLiteProvider.
-   * Without the provider, this hook would throw an error.
-   */
   const db = useSQLiteContext();
 
-  /**
-   * Form State
-   *
-   * These state variables control the input fields (controlled components).
-   * They're stored as strings because TextInput always works with strings.
-   */
-  const [name, setName] = useState<string>("");
-  const [quantity, setQuantity] = useState<string>("");
+  const [name, setName] = useState("");
+  const [quantity, setQuantity] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
-
-  /**
-   * Database State
-   *
-   * Stores the items retrieved from the database.
-   * When this updates, React re-renders the FlatList to show the new data.
-   */
+  const [sortOrder, setSortOrder] = useState<"ASC" | "DESC">("ASC");
   const [items, setItems] = useState<Item[]>([]);
+  const [menuVisible, setMenuVisible] = useState(false);
 
+  const openMenu = () => setMenuVisible(true);
+  const closeMenu = () => setMenuVisible(false);
 
+  // ✅ Memoize loadItems to prevent re-creation on every render
+  const loadItems = useCallback(async () => {
+    try {
+      const value = await fetchItems(db, sortOrder);
+      setItems(value);
+    } catch (err) {
+      console.log("Failed to fetch items", err);
+    }
+  }, [db, sortOrder]);
 
-  /**
-   * Load Items on Mount
-   *
-   * useEffect with empty dependency array [] runs once when component mounts.
-   * This is the perfect place to load initial data from the database.
-   *
-   * Note: VSCode may warn about missing 'loadItems' dependency.
-   * We intentionally omit it because we only want this to run once on mount,
-   * not every time loadItems function is redefined.
-   */
+  // ✅ Only re-run when sortOrder changes
   useEffect(() => {
     loadItems();
-  }, []);
+  }, [loadItems]);
 
-  /**
-   * Load Items Function
-   *
-   * Fetches all items from the database and updates the local `items` state.
-   *
-   * This function is called when the component first mounts (via useEffect)
-   * and whenever data changes (after an insert, update, or delete operation).
-   *
-   * The fetched data is stored in state so the FlatList automatically re-renders
-   * to reflect the latest information from the database.
-   *
-   * @returns Promise that resolves when items are successfully loaded
-   */
-  //const loadItems = async () => {
-    //try {
-     // const value = await fetchItems(db);
-      //setItems(value);
-    //} catch (err) {
-      //console.log("Failed to fetch items", err);
-    //}
-  //};
-  const loadItems = async () => {
-  try {
-    const value = await fetchItems(db, sortOrder); // <-- pass the order here
-    setItems(value);
-  } catch (err) {
-    console.log("Failed to fetch items", err);
-  }
-};
-
-  /**
-   * Save Item Function
-   *
-   * Validates user input and saves a new item to the database.
-   *
-   * Validation Steps:
-   * 1. Check name isn't empty (trim() removes whitespace)
-   * 2. Parse quantity string to integer (base 10)
-   * 3. Check that quantity is a valid number (not NaN)
-   *
-   * After successful insert:
-   * - Reload items to show the new entry
-   * - Clear the form fields for the next entry
-   */
-  const saveItem = async () => {
-    // Validate name is not empty or just whitespace
-    if (!name.trim()) return;
-
-    // Validate quantity is a valid number
-    const parsedQuantity = parseInt(quantity, 10);
-    if (Number.isNaN(parsedQuantity)) return;
-
-    try {
-      await insertItem(db, name, parsedQuantity);
-      await loadItems(); // Refresh the list to show the new item
-
-      // Clear form fields
-      setName("");
-      setQuantity("");
-    } catch (err) {
-      console.log("Failed to save item");
-      console.log(err);
-    }
-  };
-
-/**
-   * Save or Update Item Function
-   *
-   * Validates user input, then either inserts a new record or updates
-   * an existing record depending on whether `editingId` is null.
-   *
-   * Validation Steps:
-   * 1. Ensure the name is not empty (after trimming whitespace)
-   * 2. Parse quantity as an integer
-   * 3. Ensure quantity is a valid number (not NaN)
-   *
-   * Workflow:
-   * - If no item is being edited (editingId is null), insert a new item.
-   * - If an item is being edited, update that record in the database.
-   *
-   * After successful operation:
-   * - The list of items is refreshed from the database
-   * - Form fields and editing state are cleared
-   *
-   * @returns Promise that resolves when the save or update completes
-   */
   const saveOrUpdate = async () => {
     if (!name.trim()) return;
     const parsedQuantity = parseInt(quantity, 10);
@@ -165,44 +61,12 @@ export default function App() {
     }
   };
 
-  /**
-   * Start Edit Function
-   *
-   * Prepares the form for editing an existing item.
-   *
-   * When a user taps the "Edit" button, this function:
-   * - Saves the selected item's `id` in state (editingId)
-   * - Populates the input fields (`name` and `quantity`)
-   *   so the user can modify existing values
-   *
-   * Once editing is complete and the user taps "Update Item",
-   * the `saveOrUpdate` function will handle saving the changes.
-   *
-   * @param item - The item object that the user selected to edit
-   * @returns void
-   */
   const startEdit = (item: Item) => {
     setEditingId(item.id);
     setName(item.name);
     setQuantity(String(item.quantity));
   };
 
-  /**
-   * Confirm Delete Function
-   *
-   * Displays a confirmation dialog before deleting an item from the database.
-   *
-   * Workflow:
-   * 1. Shows an alert asking the user to confirm deletion.
-   * 2. If the user confirms, deletes the item using its `id`.
-   * 3. Reloads the item list to reflect the change.
-   * 4. If the deleted item was currently being edited, clears the form.
-   *
-   * This confirmation step helps prevent accidental deletions.
-   *
-   * @param id - The unique identifier of the item to delete
-   * @returns void
-   */
   const confirmDelete = (id: number) => {
     Alert.alert("Delete item?", "This cannot be undone.", [
       { text: "Cancel", style: "cancel" },
@@ -235,13 +99,6 @@ export default function App() {
         value={name}
         onChangeText={setName}
       />
-
-      {/* 
-        Quantity Input
-        
-        keyboardType="numeric" shows a number keyboard on mobile devices.
-        Note: This doesn't prevent non-numeric input, so we still validate in saveItem().
-      */}
       <TextInput
         style={styles.input}
         placeholder="Quantity"
@@ -250,51 +107,58 @@ export default function App() {
         keyboardType="numeric"
       />
 
-      {/* 
-        Save Button
-        Triggers the saveOrUpdate function which validates and saves to database.
-      */}
       <Button
         title={editingId === null ? "Save Item" : "Update Item"}
-        onPress={saveItem}
+        onPress={saveOrUpdate}
       />
-      
-      
-      <View style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 8, overflow: "hidden" }}>
-        <Picker
-          selectedValue={sortOrder}
-          onValueChange={(value: string) => {
-            setSortOrder(value as 'ASC' | 'DESC');
-            loadItems();
-          }}
-          style={styles.dropdown}
+
+      <View style={{ marginTop: 20 }}>
+        <Menu
+          visible={menuVisible}
+          onDismiss={closeMenu}
+          anchor={
+            <PaperButton
+              mode="outlined"
+              onPress={openMenu}
+              contentStyle={{ flexDirection: "row", justifyContent: "space-between" }}
+              style={{ width: 200, borderRadius: 8 }}
+              uppercase={false}
+            >
+              {sortOrder === "ASC" ? "A to Z" : "Z to A"}
+            </PaperButton>
+          }
         >
-          <Picker.Item label="A to Z" value="ASC" />
-          <Picker.Item label="Z to A" value="DESC" />
-        </Picker>
+          <Menu.Item
+            onPress={() => {
+              setSortOrder("ASC");
+              closeMenu();
+            }}
+            title="A to Z"
+          />
+          <Menu.Item
+            onPress={() => {
+              setSortOrder("DESC");
+              closeMenu();
+            }}
+            title="Z to A"
+          />
+        </Menu>
       </View>
+
       <FlatList
         style={styles.list}
         data={items}
         keyExtractor={(item) => item.id.toString()}
         ItemSeparatorComponent={() => (
-          <View
-            style={{
-              height: 1,
-              backgroundColor: "#eee",
-              marginLeft: 14,
-              marginRight: 14,
-            }}
-          />
+          <View style={{ height: 1, backgroundColor: "#eee", marginHorizontal: 14 }} />
         )}
         renderItem={({ item }) => (
           <ItemRow
             name={item.name}
             quantity={item.quantity}
             onEdit={() => startEdit(item)}
-            onDelete={() => confirmDelete(item.id)} onDuplicate={function (): void {
-              throw new Error("Function not implemented.");
-            } }          />
+            onDelete={() => confirmDelete(item.id)}
+          />
         )}
         ListEmptyComponent={
           <Text style={{ textAlign: "center", marginTop: 24, color: "#888" }}>
@@ -302,9 +166,7 @@ export default function App() {
           </Text>
         }
         contentContainerStyle={
-          items.length === 0
-            ? { flexGrow: 1, justifyContent: "center" }
-            : undefined
+          items.length === 0 ? { flexGrow: 1, justifyContent: "center" } : undefined
         }
       />
     </View>
@@ -316,16 +178,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
     padding: 20,
-    // Removed alignItems and justifyContent
   },
-  dropdown: {
-    height: 50,
-    width: 200,
-    borderRadius: 8,
-    marginTop: 20,
-  },
-  // ... rest unchanged
-
   title: {
     fontSize: 24,
     fontWeight: "bold",
@@ -341,12 +194,5 @@ const styles = StyleSheet.create({
   list: {
     marginTop: 20,
     width: "100%",
-  },
-  item: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#ccc",
   },
 });

@@ -7,10 +7,10 @@ type Props = {
   quantity: number;
   onEdit: () => void;
   onDelete: () => void;
-  onDuplicate: () => void;
+  
 };
 
-const ItemRow: React.FC<Props> = ({ name, quantity, onEdit, onDelete, onDuplicate }) => {
+const ItemRow: React.FC<Props> = ({ name, quantity, onEdit, onDelete }) => {
   return (
     <View style={styles.container}>
       {/* Left side: Item info */}
