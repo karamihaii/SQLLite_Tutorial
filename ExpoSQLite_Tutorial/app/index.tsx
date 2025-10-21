@@ -105,33 +105,19 @@ export default function App() {
           value={name}
           onChangeText={setName}
         />
-
+      
         {/* Quantity Dropdown */}
-        <Menu
-          visible={menuVisible}
-          onDismiss={() => setMenuVisible(false)}
-          anchor={
-            <TouchableOpacity
-              style={styles.menuButton}
-              onPress={() => setMenuVisible(true)}
-            >
-              <Text style={styles.menuButtonText}>
-                {quantity !== null ? `Qty: ${quantity}` : "Select Quantity"}
-              </Text>
-            </TouchableOpacity>
-          }
-        >
-          {[1, 2, 3, 4, 5, 10, 20].map((num) => (
-            <Menu.Item
-              key={num}
-              title={`${num}`}
-              onPress={() => {
-                setQuantity(num);
-                setMenuVisible(false);
-              }}
-            />
-          ))}
-        </Menu>
+        <TextInput
+          style={styles.input}
+          placeholder="Quantity"
+          value={quantity !== null ? String(quantity) : ""}
+          onChangeText={(text) => {
+            // Allow only numbers
+            const numeric = text.replace(/[^0-9]/g, "");
+            setQuantity(numeric ? parseInt(numeric, 10) : null);
+          }}
+          keyboardType="numeric"
+        />
 
         <Button
           title={editingId === null ? "Save Item" : "Update Item"}
